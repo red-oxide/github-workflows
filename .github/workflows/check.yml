@@ -1,0 +1,42 @@
+name: Check
+
+on:
+  workflow_call:
+    inputs:
+      cachix:
+        description: >-
+          Cachix cache to pull from and, on pushes to the default branch,
+          push builds to. Leave empty to skip Cachix.
+        type: string
+        required: false
+        default: ""
+    secrets:
+      CACHIX_AUTH_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  flake-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+
+      # Pull-request runs only pull, keeping unmerged builds out of the
+      # public cache. Without a token (fork pull requests) it also only pulls.
+      - name: Set up Cachix
+        if: inputs.cachix != ''
+        uses: cachix/cachix-action@v16
+        with:
+          name: ${{ inputs.cachix }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          skipPush: ${{ github.event_name == 'pull_request' }}
+
+      - name: Run flake checks
+        run: nix flake check --print-build-logs
